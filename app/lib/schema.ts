@@ -47,10 +47,12 @@ export const emails = sqliteTable("email", {
     .notNull()
     .$defaultFn(() => new Date()),
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+  pinnedAt: integer("pinned_at", { mode: "timestamp_ms" }),
 }, (table) => ({
   expiresAtIdx: index("email_expires_at_idx").on(table.expiresAt),
   userIdIdx: index("email_user_id_idx").on(table.userId),
   addressLowerIdx: index("email_address_lower_idx").on(sql`LOWER(${table.address})`),
+  pinnedAtIdx: index("email_pinned_at_idx").on(table.pinnedAt),
 }))
 
 export const messages = sqliteTable("message", {
