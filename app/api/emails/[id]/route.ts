@@ -8,6 +8,53 @@ import { checkBasicSendPermission } from "@/lib/send-permissions"
 
 export const runtime = "edge"
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const userId = await getUserId()
+
+  try {
+    const db = createDb()
+    const { id } = await params
+    const body = await request.json<{ pinned: boolean }>()
+
+    if (typeof body.pinned !== "boolean") {
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      )
+    }
+
+    const email = await db.query.emails.findFirst({
+      where: and(
+        eq(emails.id, id),
+        eq(emails.userId, userId!)
+      )
+    })
+
+    if (!email) {
+      return NextResponse.json(
+        { error: "邮箱不存在或无权限操作" },
+        { status: 403 }
+      )
+    }
+
+    const pinnedAt = body.pinned ? new Date() : null
+    await db.update(emails)
+      .set({ pinnedAt })
+      .where(eq(emails.id, id))
+
+    return NextResponse.json({ success: true, pinnedAt })
+  } catch (error) {
+    console.error('Failed to update email pin status:', error)
+    return NextResponse.json(
+      { error: "更新邮箱失败" },
+      { status: 500 }
+    )
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
