@@ -28,7 +28,13 @@
     "deleteSuccess": "邮箱已删除",
     "deleteFailed": "删除邮箱失败",
     "error": "错误",
-    "success": "成功"
+    "success": "成功",
+    "search": "搜索邮箱...",
+    "filterAll": "全部",
+    "filterPermanent": "永久",
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "pinned": "已置顶"
   },
   "create": {
     "title": "创建邮箱",
