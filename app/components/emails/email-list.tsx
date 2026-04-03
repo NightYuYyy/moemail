@@ -1,13 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations } from "next-intl"
 import { CreateDialog } from "./create-dialog"
 import { ShareDialog } from "./share-dialog"
-import { Mail, RefreshCw, Trash2 } from "lucide-react"
+import { Mail, RefreshCw, Trash2, Pin, Search, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Tabs, SlidingTabsList, SlidingTabsTrigger } from "@/components/ui/tabs"
 import { useThrottle } from "@/hooks/use-throttle"
 import { EMAIL_CONFIG } from "@/config"
 import { useToast } from "@/components/ui/use-toast"
@@ -30,6 +31,7 @@ interface Email {
   address: string
   createdAt: number
   expiresAt: number
+  pinnedAt: number | null
 }
 
 interface EmailListProps {
@@ -38,6 +40,7 @@ interface EmailListProps {
 }
 
 interface EmailResponse {
+  pinned: Email[]
   emails: Email[]
   nextCursor: string | null
   total: number
@@ -50,6 +53,10 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   const t = useTranslations("emails.list")
   const tCommon = useTranslations("common.actions")
   const [emails, setEmails] = useState<Email[]>([])
+  const [pinnedEmails, setPinnedEmails] = useState<Email[]>([])
+  const [searchInput, setSearchInput] = useState("")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [permanentFilter, setPermanentFilter] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
@@ -58,31 +65,26 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   const [emailToDelete, setEmailToDelete] = useState<Email | null>(null)
   const { toast } = useToast()
 
-  const fetchEmails = async (cursor?: string) => {
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput), 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  const fetchEmails = useCallback(async (cursor?: string) => {
     try {
       const url = new URL("/api/emails", window.location.origin)
-      if (cursor) {
-        url.searchParams.set('cursor', cursor)
-      }
+      if (cursor) url.searchParams.set('cursor', cursor)
+      if (searchQuery) url.searchParams.set('search', searchQuery)
+      if (permanentFilter) url.searchParams.set('permanent', 'true')
+
       const response = await fetch(url)
       const data = await response.json() as EmailResponse
       
+      setPinnedEmails(data.pinned || [])
+
       if (!cursor) {
-        const newEmails = data.emails
-        const oldEmails = emails
-
-        const lastDuplicateIndex = newEmails.findIndex(
-          newEmail => oldEmails.some(oldEmail => oldEmail.id === newEmail.id)
-        )
-
-        if (lastDuplicateIndex === -1) {
-          setEmails(newEmails)
-          setNextCursor(data.nextCursor)
-          setTotal(data.total)
-          return
-        }
-        const uniqueNewEmails = newEmails.slice(0, lastDuplicateIndex)
-        setEmails([...uniqueNewEmails, ...oldEmails])
+        setEmails(data.emails)
+        setNextCursor(data.nextCursor)
         setTotal(data.total)
         return
       }
@@ -96,7 +98,7 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
       setRefreshing(false)
       setLoadingMore(false)
     }
-  }
+  }, [searchQuery, permanentFilter])
 
   const handleRefresh = async () => {
     setRefreshing(true)
@@ -117,8 +119,29 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
   }, 200)
 
   useEffect(() => {
-    if (session) fetchEmails()
-  }, [session])
+    if (session) {
+      setLoading(true)
+      fetchEmails()
+    }
+  }, [session, searchQuery, permanentFilter, fetchEmails])
+
+  const handlePinToggle = async (email: Email) => {
+    try {
+      const isPinned = email.pinnedAt !== null
+      const response = await fetch(`/api/emails/${email.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pinned: !isPinned })
+      })
+      if (!response.ok) {
+        toast({ title: t("error"), description: "Failed to update pin status", variant: "destructive" })
+        return
+      }
+      fetchEmails()
+    } catch {
+      toast({ title: t("error"), description: "Failed to update pin status", variant: "destructive" })
+    }
+  }
 
   const handleDelete = async (email: Email) => {
     try {
@@ -136,8 +159,7 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
         return
       }
 
-      setEmails(prev => prev.filter(e => e.id !== email.id))
-      setTotal(prev => prev - 1)
+      await fetchEmails()
 
       toast({
         title: t("success"),
@@ -176,20 +198,98 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
             </Button>
             <span className="text-xs text-gray-500">
               {role === ROLES.EMPEROR ? (
-                t("emailCountUnlimited", { count: total })
+                t("emailCountUnlimited", { count: pinnedEmails.length + total })
               ) : (
-                t("emailCount", { count: total, max: config?.maxEmails || EMAIL_CONFIG.MAX_ACTIVE_EMAILS })
+                t("emailCount", { count: pinnedEmails.length + total, max: config?.maxEmails || EMAIL_CONFIG.MAX_ACTIVE_EMAILS })
               )}
             </span>
           </div>
           <CreateDialog onEmailCreated={handleRefresh} />
         </div>
         
+        <div className="px-2 pt-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder={t("search")}
+              className="w-full pl-8 pr-8 py-1.5 text-sm rounded-md border border-primary/20 bg-transparent focus:outline-none focus:ring-1 focus:ring-primary/30"
+            />
+            {searchInput && (
+              <button
+                onClick={() => setSearchInput("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+              >
+                <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="px-2 pt-2">
+          <Tabs value={permanentFilter ? "permanent" : "all"} onValueChange={(v) => setPermanentFilter(v === "permanent")} className="w-full">
+            <SlidingTabsList className="w-full">
+              <SlidingTabsTrigger value="all" className="flex-1">{t("filterAll")}</SlidingTabsTrigger>
+              <SlidingTabsTrigger value="permanent" className="flex-1">{t("filterPermanent")}</SlidingTabsTrigger>
+            </SlidingTabsList>
+          </Tabs>
+        </div>
+        
         <div className="flex-1 overflow-auto p-2" onScroll={handleScroll}>
           {loading ? (
             <div className="text-center text-sm text-gray-500">{t("loading")}</div>
-          ) : emails.length > 0 ? (
+          ) : (pinnedEmails.length > 0 || emails.length > 0) ? (
             <div className="space-y-1">
+              {pinnedEmails.length > 0 && (
+                <>
+                  {pinnedEmails.map(email => (
+                    <div
+                      key={email.id}
+                      className={cn(
+                        "flex items-center gap-2 p-2 rounded cursor-pointer text-sm group",
+                        "bg-primary/5 border border-primary/10",
+                        selectedEmailId === email.id && "bg-primary/10"
+                      )}
+                      onClick={() => onEmailSelect(email)}
+                    >
+                      <Pin className="h-4 w-4 text-primary/60 shrink-0" />
+                      <div className="truncate flex-1">
+                        <div className="font-medium truncate">{email.address}</div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(email.expiresAt).getFullYear() === 9999 ? (
+                            t("permanent")
+                          ) : (
+                            `${t("expiresAt")}: ${new Date(email.expiresAt).toLocaleString()}`
+                          )}
+                        </div>
+                      </div>
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-1" onClick={(e) => e.stopPropagation()}>
+                        <ShareDialog emailId={email.id} emailAddress={email.address} />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handlePinToggle(email)}
+                          title={t("unpin")}
+                        >
+                          <Pin className="h-4 w-4 text-primary" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => setEmailToDelete(email)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="border-t border-primary/10 my-1" />
+                </>
+              )}
               {emails.map(email => (
                 <div
                   key={email.id}
@@ -212,6 +312,15 @@ export function EmailList({ onEmailSelect, selectedEmailId }: EmailListProps) {
                   </div>
                   <div className="opacity-0 group-hover:opacity-100 flex gap-1" onClick={(e) => e.stopPropagation()}>
                     <ShareDialog emailId={email.id} emailAddress={email.address} />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handlePinToggle(email)}
+                      title={t("pin")}
+                    >
+                      <Pin className="h-4 w-4 text-gray-400" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
