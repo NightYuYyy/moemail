@@ -28,7 +28,13 @@
     "deleteSuccess": "メールボックスを削除しました",
     "deleteFailed": "メールボックスの削除に失敗しました",
     "error": "エラー",
-    "success": "成功"
+    "success": "成功",
+    "search": "メールを検索...",
+    "filterAll": "すべて",
+    "filterPermanent": "永久",
+    "pin": "ピン留め",
+    "unpin": "ピン留め解除",
+    "pinned": "ピン留め済み"
   },
   "create": {
     "title": "メールボックスを作成",

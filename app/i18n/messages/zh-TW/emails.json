@@ -28,7 +28,13 @@
     "deleteSuccess": "郵箱已刪除",
     "deleteFailed": "刪除郵箱失敗",
     "error": "錯誤",
-    "success": "成功"
+    "success": "成功",
+    "search": "搜尋郵箱...",
+    "filterAll": "全部",
+    "filterPermanent": "永久",
+    "pin": "置頂",
+    "unpin": "取消置頂",
+    "pinned": "已置頂"
   },
   "create": {
     "title": "建立郵箱",

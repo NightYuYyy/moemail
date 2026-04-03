@@ -28,7 +28,13 @@
     "deleteSuccess": "Email deleted successfully",
     "deleteFailed": "Failed to delete email",
     "error": "Error",
-    "success": "Success"
+    "success": "Success",
+    "search": "Search emails...",
+    "filterAll": "All",
+    "filterPermanent": "Permanent",
+    "pin": "Pin",
+    "unpin": "Unpin",
+    "pinned": "Pinned"
   },
   "create": {
     "title": "Create Email",

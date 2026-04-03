@@ -28,7 +28,13 @@
     "deleteSuccess": "이메일이 성공적으로 삭제되었습니다",
     "deleteFailed": "이메일 삭제에 실패했습니다",
     "error": "오류",
-    "success": "성공"
+    "success": "성공",
+    "search": "이메일 검색...",
+    "filterAll": "전체",
+    "filterPermanent": "영구",
+    "pin": "고정",
+    "unpin": "고정 해제",
+    "pinned": "고정됨"
   },
   "create": {
     "title": "이메일 생성",
