@@ -51,3 +51,9 @@ public/sw.js
 wrangler.json
 wrangler.cleanup.json
 wrangler.email.json
+
+# AI coding assistants
+.codex
+.sisyphus/
+.claude/settings.local.json
+.claude/agent-memory-local/
