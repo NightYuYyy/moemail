@@ -42,6 +42,8 @@
     "namePlaceholder": "留空则随机生成",
     "domain": "域名",
     "domainPlaceholder": "选择域名",
+    "wildcardDomainPlaceholder": "输入完整子域，如 a.{domain}",
+    "invalidWildcardDomain": "请输入符合当前泛域规则的完整域名",
     "expiryTime": "有效期",
     "oneHour": "1 小时",
     "oneDay": "1 天",

@@ -141,6 +141,13 @@
       "when": 1775159275385,
       "tag": "0019_bright_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1788336230447,
+      "tag": "0020_easy_thunderbird",
+      "breakpoints": true
     }
   ]
 }

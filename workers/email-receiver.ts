@@ -1,75 +1,134 @@
-import { Env } from '../types'
-import { drizzle } from 'drizzle-orm/d1'
-import { messages, emails, webhooks } from '../app/lib/schema'
-import { eq, sql } from 'drizzle-orm'
-import PostalMime from 'postal-mime'
-import { WEBHOOK_CONFIG } from '../app/config/webhook'
-import { EmailMessage } from '../app/lib/webhook'
+import { sha256Hex, verifyGatewaySignature } from "./lib/gateway-auth"
+import { processIncomingEmail } from "./lib/process-incoming-email"
+import { getSmtpAllowedDomainRules, isSmtpRecipientAllowed } from "./lib/smtp-domain-rules"
 
-const handleEmail = async (message: ForwardableEmailMessage, env: Env) => {
-  const db = drizzle(env.DB, { schema: { messages, emails, webhooks } })
+const MAX_MESSAGE_BYTES = 25 * 1024 * 1024
+const MAX_RECIPIENTS = 50
+const MAX_CLOCK_SKEW_SECONDS = 300
+const TOKEN_PATTERN = /^[a-zA-Z0-9_.-]{1,160}$/
 
-  const parsedMessage = await PostalMime.parse(message.raw)
-
-  console.log("parsedMessage:", parsedMessage)
-
-  try {
-    const targetEmail = await db.query.emails.findFirst({
-      where: eq(sql`LOWER(${emails.address})`, message.to.toLowerCase())
-    })
-
-    if (!targetEmail) {
-      console.error(`Email not found: ${message.to}`)
-      return
-    }
-
-    const savedMessage = await db.insert(messages).values({
-      emailId: targetEmail.id,
-      fromAddress: message.from,
-      subject: parsedMessage.subject || '(无主题)',
-      content: parsedMessage.text || '',
-      html: parsedMessage.html || '',
-      type: 'received',
-    }).returning().get()
-
-    const webhook = await db.query.webhooks.findFirst({
-      where: eq(webhooks.userId, targetEmail!.userId!)
-    })
-
-    if (webhook?.enabled) {
-      try {
-        await fetch(webhook.url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Webhook-Event': WEBHOOK_CONFIG.EVENTS.NEW_MESSAGE
-          },
-          body: JSON.stringify({
-            emailId: targetEmail.id,
-            messageId: savedMessage.id,
-            fromAddress: savedMessage.fromAddress,
-            subject: savedMessage.subject,
-            content: savedMessage.content,
-            html: savedMessage.html,
-            receivedAt: savedMessage.receivedAt.toISOString(),
-            toAddress: targetEmail.address
-          } as EmailMessage)
-        })
-      } catch (error) {
-        console.error('Failed to send webhook:', error)
-      }
-    }
-
-    console.log(`Email processed: ${parsedMessage.subject}`)
-  } catch (error) {
-    console.error('Failed to process email:', error)
-  }
+interface EmailWorkerEnv extends Pick<CloudflareEnv, "DB"> {
+  SMTP_GATEWAY_SECRET?: string
+  SMTP_ALLOWED_DOMAIN_SUFFIXES?: string
+  SMTP_ALLOWED_DOMAIN?: string
 }
 
 const worker = {
-  async email(message: ForwardableEmailMessage, env: Env): Promise<void> {
-    await handleEmail(message, env)
-  }
-}
+  async email(message: ForwardableEmailMessage, env: EmailWorkerEnv): Promise<void> {
+    try {
+      await processIncomingEmail({
+        from: message.from,
+        to: message.to,
+        raw: message.raw,
+      }, env)
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: "email_processing_failed",
+        source: "cloudflare_email_routing",
+        error: error instanceof Error ? error.message : String(error),
+      }))
+      throw error
+    }
+  },
 
-export default worker 
+  async fetch(request: Request, env: EmailWorkerEnv): Promise<Response> {
+    const url = new URL(request.url)
+    if (request.method === "GET" && url.pathname === "/health") {
+      return Response.json({ status: "ok" })
+    }
+
+    if (request.method !== "POST" || url.pathname !== "/v1/inbound") {
+      return Response.json({ error: "not_found" }, { status: 404 })
+    }
+
+    if (!env.SMTP_GATEWAY_SECRET || env.SMTP_GATEWAY_SECRET.length < 32) {
+      console.error(JSON.stringify({ event: "gateway_configuration_error", reason: "missing_secret" }))
+      return Response.json({ error: "service_unavailable" }, { status: 503 })
+    }
+
+    const contentLength = Number(request.headers.get("content-length") || "0")
+    if (contentLength > MAX_MESSAGE_BYTES) {
+      return Response.json({ error: "message_too_large" }, { status: 413 })
+    }
+
+    const timestamp = request.headers.get("x-moe-timestamp") || ""
+    const nonce = request.headers.get("x-moe-nonce") || ""
+    const deliveryId = request.headers.get("x-moe-delivery-id") || ""
+    const sender = request.headers.get("x-moe-sender") || ""
+    const recipientsHeader = request.headers.get("x-moe-recipients") || ""
+    const signature = request.headers.get("x-moe-signature") || ""
+    const timestampNumber = Number(timestamp)
+
+    if (
+      !Number.isInteger(timestampNumber)
+      || Math.abs(Math.floor(Date.now() / 1000) - timestampNumber) > MAX_CLOCK_SKEW_SECONDS
+      || !TOKEN_PATTERN.test(nonce)
+      || !TOKEN_PATTERN.test(deliveryId)
+      || !sender
+      || !recipientsHeader
+    ) {
+      return Response.json({ error: "invalid_envelope" }, { status: 400 })
+    }
+
+    const recipients = Array.from(new Set(
+      recipientsHeader.split(",").map(value => value.trim().toLowerCase()).filter(Boolean),
+    ))
+    const allowedDomainRules = getSmtpAllowedDomainRules(env)
+
+    if (
+      recipients.length === 0
+      || recipients.length > MAX_RECIPIENTS
+      || !allowedDomainRules
+      || recipients.some(recipient => !isSmtpRecipientAllowed(recipient, allowedDomainRules))
+    ) {
+      return Response.json({ error: "invalid_recipient" }, { status: 400 })
+    }
+
+    const raw = await request.arrayBuffer()
+    if (raw.byteLength === 0 || raw.byteLength > MAX_MESSAGE_BYTES) {
+      return Response.json({ error: "invalid_message_size" }, { status: raw.byteLength > MAX_MESSAGE_BYTES ? 413 : 400 })
+    }
+
+    const bodySha256 = await sha256Hex(raw)
+    const verified = await verifyGatewaySignature({
+      timestamp,
+      nonce,
+      deliveryId,
+      sender,
+      recipients: recipientsHeader,
+      bodySha256,
+    }, env.SMTP_GATEWAY_SECRET, signature)
+
+    if (!verified) {
+      return Response.json({ error: "invalid_signature" }, { status: 401 })
+    }
+
+    try {
+      const results = []
+      for (const recipient of recipients) {
+        results.push(await processIncomingEmail({
+          from: sender,
+          to: recipient,
+          raw,
+          ingressKey: `${deliveryId}:${recipient}`,
+        }, env))
+      }
+
+      return Response.json({
+        stored: results.filter(result => result.status === "stored").length,
+        duplicates: results.filter(result => result.status === "duplicate").length,
+        ignored: results.filter(result => result.status === "ignored").length,
+      })
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: "email_processing_failed",
+        source: "smtp_gateway",
+        deliveryId,
+        error: error instanceof Error ? error.message : String(error),
+      }))
+      return Response.json({ error: "processing_failed" }, { status: 500 })
+    }
+  },
+} satisfies ExportedHandler<EmailWorkerEnv>
+
+export default worker

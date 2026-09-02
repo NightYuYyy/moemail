@@ -1,0 +1,9 @@
+[Unit]
+Description=Renew MoeMail SMTP TLS certificate
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/moemail-renew-cert

@@ -42,6 +42,8 @@
     "namePlaceholder": "空白の場合はランダムに生成",
     "domain": "ドメイン",
     "domainPlaceholder": "ドメインを選択",
+    "wildcardDomainPlaceholder": "完全なサブドメインを入力（例: a.{domain}）",
+    "invalidWildcardDomain": "選択したワイルドカード規則に一致するドメインを入力してください",
     "expiryTime": "有効期間",
     "oneHour": "1時間",
     "oneDay": "1日",

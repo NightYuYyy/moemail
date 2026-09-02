@@ -66,6 +66,7 @@ export const messages = sqliteTable("message", {
   content: text("content").notNull(),
   html: text("html"),
   type: text("type"),
+  ingressKey: text("ingress_key"),
   receivedAt: integer("received_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -75,6 +76,7 @@ export const messages = sqliteTable("message", {
 }, (table) => ({
   emailIdIdx: index("message_email_id_idx").on(table.emailId),
   emailIdReceivedAtTypeIdx: index("message_email_id_received_at_type_idx").on(table.emailId, table.receivedAt, table.type),
+  ingressKeyIdx: uniqueIndex("message_ingress_key_idx").on(table.ingressKey),
 }))
 
 export const webhooks = sqliteTable('webhook', {

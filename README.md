@@ -216,6 +216,10 @@ This project supports automated deployment using GitHub Actions. It supports the
 ## Email Domain Configuration
 
 In the MoeMail User Profile page, you can configure the site's email domains. Supports multiple domain configurations, separated by commas.
+
+Domain configuration also accepts wildcard subdomain rules such as `*.example.com`. Creating a mailbox from a wildcard rule requires a concrete domain such as `a.example.com`; the literal wildcard is never used as an email address.
+
+Cloudflare Email Routing does not receive unlimited dynamic subdomains directly. Deploy `services/smtp-gateway` to bridge wildcard SMTP traffic into the existing Email Worker over signed HTTPS. See [`docs/WILDCARD_SMTP_GATEWAY.md`](docs/WILDCARD_SMTP_GATEWAY.md) for deployment, secret, verification, and rollback details.
 ![Email Domain Configuration](https://pic.otaku.ren/20241227/AQAD88AxG67zeVd-.jpg "Email Domain Configuration")
 
 ### Cloudflare Email Routing Configuration

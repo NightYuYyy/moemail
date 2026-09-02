@@ -5,6 +5,10 @@ declare global {
   interface CloudflareEnv {
     DB: D1Database;
     SITE_CONFIG: KVNamespace;
+    SMTP_GATEWAY_SECRET?: string;
+    SMTP_ALLOWED_DOMAIN_SUFFIXES?: string;
+    /** @deprecated Use SMTP_ALLOWED_DOMAIN_SUFFIXES. */
+    SMTP_ALLOWED_DOMAIN?: string;
   }
 
   interface Window {

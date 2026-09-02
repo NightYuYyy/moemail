@@ -2,6 +2,7 @@ import { PERMISSIONS, Role, ROLES } from "@/lib/permissions"
 import { getRequestContext } from "@cloudflare/next-on-pages"
 import { EMAIL_CONFIG } from "@/config"
 import { checkPermission } from "@/lib/auth"
+import { normalizeEmailDomainRules } from "@/lib/email-domain"
 
 export const runtime = "edge"
 
@@ -77,6 +78,11 @@ export async function POST(request: Request) {
     secretKey: ""
   }
 
+  const normalizedEmailDomains = normalizeEmailDomainRules(emailDomains)
+  if (!normalizedEmailDomains) {
+    return Response.json({ error: "无效的邮箱域名配置" }, { status: 400 })
+  }
+
   if (turnstileConfig.enabled && (!turnstileConfig.siteKey || !turnstileConfig.secretKey)) {
     return Response.json({ error: "Turnstile 启用时需要提供 Site Key 和 Secret Key" }, { status: 400 })
   }
@@ -84,7 +90,7 @@ export async function POST(request: Request) {
   const env = getRequestContext().env
   await Promise.all([
     env.SITE_CONFIG.put("DEFAULT_ROLE", defaultRole),
-    env.SITE_CONFIG.put("EMAIL_DOMAINS", emailDomains),
+    env.SITE_CONFIG.put("EMAIL_DOMAINS", normalizedEmailDomains),
     env.SITE_CONFIG.put("ADMIN_CONTACT", adminContact),
     env.SITE_CONFIG.put("MAX_EMAILS", maxEmails),
     env.SITE_CONFIG.put("TURNSTILE_ENABLED", turnstileConfig.enabled.toString()),

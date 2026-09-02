@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EXPIRY_OPTIONS } from "@/types/email"
 import { useCopy } from "@/hooks/use-copy"
 import { useConfig } from "@/hooks/use-config"
+import { isEmailDomainAllowed, isWildcardEmailDomainRule } from "@/lib/email-domain"
 
 interface CreateDialogProps {
   onEmailCreated: () => void
@@ -28,21 +29,32 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
   const [loading, setLoading] = useState(false)
   const [emailName, setEmailName] = useState("")
   const [currentDomain, setCurrentDomain] = useState("")
+  const [wildcardDomain, setWildcardDomain] = useState("")
   const [expiryTime, setExpiryTime] = useState(EXPIRY_OPTIONS[1].value.toString())
   const { toast } = useToast()
   const { copyToClipboard } = useCopy()
 
   const generateRandomName = () => setEmailName(nanoid(8))
 
-  const copyEmailAddress = () => {
-    copyToClipboard(`${emailName}@${currentDomain}`)
-  }
+  const selectedRuleIsWildcard = isWildcardEmailDomainRule(currentDomain)
+  const resolvedDomain = selectedRuleIsWildcard ? wildcardDomain.trim().toLowerCase() : currentDomain
+
+  const copyEmailAddress = () => copyToClipboard(`${emailName}@${resolvedDomain}`)
 
   const createEmail = async () => {
     if (!emailName.trim()) {
       toast({
         title: tList("error"),
         description: t("namePlaceholder"),
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!resolvedDomain || !isEmailDomainAllowed(resolvedDomain, currentDomain)) {
+      toast({
+        title: tList("error"),
+        description: t("invalidWildcardDomain"),
         variant: "destructive"
       })
       return
@@ -55,7 +67,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: emailName,
-          domain: currentDomain,
+          domain: resolvedDomain,
           expiryTime: parseInt(expiryTime)
         })
       })
@@ -77,6 +89,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
       onEmailCreated()
       setOpen(false)
       setEmailName("")
+      setWildcardDomain("")
     } catch {
       toast({
         title: tList("error"),
@@ -136,6 +149,17 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
             </Button>
           </div>
 
+          {selectedRuleIsWildcard && (
+            <div className="flex items-center gap-2">
+              <Label className="shrink-0 text-muted-foreground">{t("domain")}</Label>
+              <Input
+                value={wildcardDomain}
+                onChange={(event) => setWildcardDomain(event.target.value)}
+                placeholder={t("wildcardDomainPlaceholder", { domain: currentDomain.slice(2) })}
+              />
+            </div>
+          )}
+
           <div className="flex items-center gap-4">
             <Label className="shrink-0 text-muted-foreground">{t("expiryTime")}</Label>
             <RadioGroup
@@ -161,7 +185,7 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
             <span className="shrink-0">{t("domain")}:</span>
             {emailName ? (
               <div className="flex items-center gap-2 min-w-0">
-                <span className="truncate">{`${emailName}@${currentDomain}`}</span>
+                <span className="truncate">{`${emailName}@${resolvedDomain || currentDomain}`}</span>
                 <div
                   className="shrink-0 cursor-pointer hover:text-primary transition-colors"
                   onClick={copyEmailAddress}
@@ -185,4 +209,4 @@ export function CreateDialog({ onEmailCreated }: CreateDialogProps) {
       </DialogContent>
     </Dialog>
   )
-} 
+}

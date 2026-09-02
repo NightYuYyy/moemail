@@ -9,6 +9,7 @@ import { getRequestContext } from "@cloudflare/next-on-pages"
 import { getUserId } from "@/lib/apiKey"
 import { getUserRole } from "@/lib/auth"
 import { ROLES } from "@/lib/permissions"
+import { isEmailDomainAllowed, normalizeEmailDomain } from "@/lib/email-domain"
 
 export const runtime = "edge"
 
@@ -53,17 +54,17 @@ export async function POST(request: Request) {
       )
     }
 
-    const domainString = await env.SITE_CONFIG.get("EMAIL_DOMAINS")
-    const domains = domainString ? domainString.split(',') : ["moemail.app"]
+    const domainString = await env.SITE_CONFIG.get("EMAIL_DOMAINS") || "moemail.app"
+    const normalizedDomain = normalizeEmailDomain(domain)
 
-    if (!domains || !domains.includes(domain)) {
+    if (!normalizedDomain || !isEmailDomainAllowed(normalizedDomain, domainString)) {
       return NextResponse.json(
         { error: "无效的域名" },
         { status: 400 }
       )
     }
 
-    const address = `${name || nanoid(8)}@${domain}`
+    const address = `${name || nanoid(8)}@${normalizedDomain}`
     const existingEmail = await db.query.emails.findFirst({
       where: eq(sql`LOWER(${emails.address})`, address.toLowerCase())
     })
@@ -102,4 +103,4 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
-} 
+}

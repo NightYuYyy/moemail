@@ -1,0 +1,86 @@
+'use strict'
+
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const os = require('node:os')
+const path = require('node:path')
+const fsp = require('node:fs/promises')
+const { Readable } = require('node:stream')
+const MessageStream = require('haraka-message-stream')
+const { loadConfig } = require('../lib/config')
+const { addressToString, createSpoolItem, parseHeaders } = require('../lib/spool')
+
+async function tempCfg() {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'haraka-webhook-test-'))
+  return loadConfig({
+    NODE_ENV: 'test',
+    MOEMAIL_INGEST_URL: 'https://example.com/hook',
+    MOEMAIL_INGEST_SECRET: 'test-secret-that-is-at-least-32-characters-long',
+    ACCEPTED_DOMAIN_SUFFIXES: 'nightyu.com',
+    SPOOL_DIR: dir,
+  })
+}
+
+test('parseHeaders preserves order and unfolds continuation lines', () => {
+  assert.deepEqual(parseHeaders(['Subject: Hello\r\n', ' folded\r\n', 'From: a@example.com\r\n']), [
+    ['Subject', 'Hello folded'],
+    ['From', 'a@example.com'],
+  ])
+})
+
+test('addressToString removes SMTP path brackets from Haraka addresses', () => {
+  assert.equal(addressToString({ address: () => '<sender@example.com>' }), 'sender@example.com')
+  assert.equal(addressToString({ address: () => '<>' }), '')
+})
+
+test('createSpoolItem writes message and metadata into pending spool', async () => {
+  const cfg = await tempCfg()
+  const connection = {
+    transaction: {
+      uuid: 'abc-123',
+      mail_from: { address: () => 'sender@example.com' },
+      rcpt_to: [{ address: () => 'user@nmail.li' }],
+      header_lines: ['From: Sender <sender@example.com>\r\n', 'Subject: Hello\r\n'],
+      message_stream: Readable.from(['From: Sender <sender@example.com>\r\nSubject: Hello\r\n\r\nBody\r\n']),
+    },
+    remote: { ip: '203.0.113.10', host: 'mx.example.com' },
+    hello: { host: 'mx.example.com' },
+  }
+
+  const item = await createSpoolItem(cfg, connection)
+  const message = await fsp.readFile(path.join(item.path, 'message.eml'), 'utf8')
+  const meta = JSON.parse(await fsp.readFile(path.join(item.path, 'meta.json'), 'utf8'))
+
+  assert.match(item.id, /abc-123/)
+  assert.equal(message, 'From: Sender <sender@example.com>\r\nSubject: Hello\r\n\r\nBody\r\n')
+  assert.equal(meta.sender, 'sender@example.com')
+  assert.deepEqual(meta.recipients, ['user@nmail.li'])
+  assert.equal(meta.subject, 'Hello')
+})
+
+test('createSpoolItem copies finalized Haraka message streams', async () => {
+  const cfg = await tempCfg()
+  const messageStream = new MessageStream({ main: { spool_after: -1 } }, 'haraka-stream-test')
+  messageStream.add_line(Buffer.from('From: Sender <sender@example.com>\r\n'))
+  messageStream.add_line(Buffer.from('Subject: Haraka stream\r\n'))
+  messageStream.add_line(Buffer.from('\r\n'))
+  messageStream.add_line(Buffer.from('Body\r\n'))
+  await new Promise((resolve) => messageStream.add_line_end(resolve))
+
+  const connection = {
+    transaction: {
+      uuid: 'haraka-stream-test',
+      mail_from: { address: () => 'sender@example.com' },
+      rcpt_to: [{ address: () => 'user@nmail.li' }],
+      header_lines: ['From: Sender <sender@example.com>\r\n', 'Subject: Haraka stream\r\n'],
+      message_stream: messageStream,
+    },
+    remote: { ip: '203.0.113.10', host: 'mx.example.com' },
+    hello: { host: 'mx.example.com' },
+  }
+
+  const item = await createSpoolItem(cfg, connection)
+  const message = await fsp.readFile(path.join(item.path, 'message.eml'), 'utf8')
+
+  assert.equal(message, 'From: Sender <sender@example.com>\r\nSubject: Haraka stream\r\n\r\nBody\r\n')
+})

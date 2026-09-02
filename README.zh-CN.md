@@ -217,6 +217,10 @@ pnpm dlx tsx ./scripts/deploy/index.ts
 在 MoeMail 个人中心页面，可以配置网站的邮箱域名，支持多域名配置，多个域名用逗号分隔
 ![邮箱域名配置](https://pic.otaku.ren/20241227/AQAD88AxG67zeVd-.jpg "邮箱域名配置")
 
+域名配置也支持 `*.example.com` 形式的泛子域规则。选择该规则创建邮箱时，需要输入实际完整子域名，例如 `a.example.com`；`*.example.com` 本身不会被用作邮箱地址。
+
+Cloudflare Email Routing 不能直接接收无限动态子域。泛子域收信需要额外部署 `services/smtp-gateway`，并由 SMTP Gateway 通过签名 HTTPS 请求将原始邮件交给 Email Worker。完整部署、密钥和回滚说明见 [`docs/WILDCARD_SMTP_GATEWAY.md`](docs/WILDCARD_SMTP_GATEWAY.md)。
+
 ### Cloudflare 邮件路由配置
 
 为了使邮箱域名生效，还需要在 Cloudflare 控制台配置邮件路由，将收到的邮件转发给 Email Worker 处理。

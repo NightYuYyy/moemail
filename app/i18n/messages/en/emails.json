@@ -42,6 +42,8 @@
     "namePlaceholder": "Leave empty for random generation",
     "domain": "Domain",
     "domainPlaceholder": "Select a domain",
+    "wildcardDomainPlaceholder": "Enter a full subdomain, for example a.{domain}",
+    "invalidWildcardDomain": "Enter a full domain allowed by the selected wildcard rule",
     "expiryTime": "Validity Period",
     "oneHour": "1 Hour",
     "oneDay": "1 Day",

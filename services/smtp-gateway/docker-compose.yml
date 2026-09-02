@@ -1,0 +1,32 @@
+services:
+  smtp-gateway:
+    build:
+      context: .
+    container_name: moemail-smtp-gateway
+    hostname: mx.nightyu.com
+    restart: unless-stopped
+    env_file:
+      - .env
+    # Night_yu 的宿主机使用 systemd-resolved stub，Docker 内置 DNS 无法稳定转发到它。
+    dns:
+      - 8.8.8.8
+      - 9.9.9.9
+    ports:
+      - "25:2525"
+    volumes:
+      - ./data:/var/spool/moemail-gateway
+      - ./certs:/certs:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const net=require('node:net');const s=net.connect(2525,'127.0.0.1');s.setTimeout(3000);s.on('connect',()=>{s.destroy();process.exit(0)});s.on('timeout',()=>process.exit(1));s.on('error',()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

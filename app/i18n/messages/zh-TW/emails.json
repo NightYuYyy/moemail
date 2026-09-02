@@ -42,6 +42,8 @@
     "namePlaceholder": "留空則隨機生成",
     "domain": "網域",
     "domainPlaceholder": "選擇網域",
+    "wildcardDomainPlaceholder": "輸入完整子網域，例如 a.{domain}",
+    "invalidWildcardDomain": "請輸入符合目前泛網域規則的完整網域",
     "expiryTime": "有效期",
     "oneHour": "1 小時",
     "oneDay": "1 天",

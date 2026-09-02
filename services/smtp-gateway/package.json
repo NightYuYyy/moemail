@@ -1,0 +1,25 @@
+{
+  "name": "@nightyu/moemail-smtp-gateway",
+  "version": "0.1.0",
+  "description": "Durable SMTP ingress gateway for MoeMail wildcard subdomains.",
+  "keywords": [
+    "haraka",
+    "smtp",
+    "email",
+    "inbound-email",
+    "webhook"
+  ],
+  "private": true,
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "scripts": {
+    "start": "node bin/start.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "Haraka": "3.3.3"
+  }
+}

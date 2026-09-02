@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+base=/opt/moemail-smtp-gateway
+image=$(cat "$base/certbot-image.txt")
+source_cert="$base/letsencrypt/live/mx.nightyu.com/fullchain.pem"
+before=$(sha256sum "$source_cert" | awk '{print $1}')
+
+docker run --rm \
+  -v "$base/letsencrypt:/etc/letsencrypt" \
+  -v "$base/acme-webroot:/var/www/certbot" \
+  "$image" renew --quiet
+
+after=$(sha256sum "$source_cert" | awk '{print $1}')
+if [ "$before" != "$after" ]; then
+  install -d -m 0750 -o root -g 1000 "$base/certs"
+  install -m 0644 -o root -g root "$source_cert" "$base/certs/fullchain.pem"
+  install -m 0640 -o root -g 1000 "$base/letsencrypt/live/mx.nightyu.com/privkey.pem" "$base/certs/privkey.pem"
+  cd "$base"
+  docker compose up -d --force-recreate
+fi

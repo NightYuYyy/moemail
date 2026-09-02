@@ -42,6 +42,8 @@
     "namePlaceholder": "비워두면 무작위로 생성됩니다",
     "domain": "도메인",
     "domainPlaceholder": "도메인 선택",
+    "wildcardDomainPlaceholder": "전체 하위 도메인을 입력하세요. 예: a.{domain}",
+    "invalidWildcardDomain": "선택한 와일드카드 규칙과 일치하는 도메인을 입력하세요",
     "expiryTime": "유효 기간",
     "oneHour": "1시간",
     "oneDay": "1일",
