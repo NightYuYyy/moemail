@@ -6,6 +6,13 @@ export interface EmailDomainRule {
   baseDomain: string
 }
 
+export interface MergeEmailDomainRulesResult {
+  value: string
+  added: string[]
+  duplicates: string[]
+  invalid: string[]
+}
+
 export function normalizeEmailDomain(domain: string): string | null {
   const normalized = domain.trim().toLowerCase().replace(/\.$/, "")
 
@@ -73,4 +80,38 @@ export function isEmailDomainAllowed(domain: string, rulesValue: string): boolea
 
 export function isWildcardEmailDomainRule(value: string): boolean {
   return normalizeEmailDomainRule(value)?.type === "wildcard"
+}
+
+export function mergeEmailDomainRules(
+  currentValue: string,
+  input: string,
+): MergeEmailDomainRulesResult {
+  const rules = parseEmailDomainRules(currentValue)
+  const seen = new Set(rules.map(rule => rule.value))
+  const added: string[] = []
+  const duplicates: string[] = []
+  const invalid: string[] = []
+
+  for (const rawValue of input.split(/[\s,，;；]+/).filter(Boolean)) {
+    const rule = normalizeEmailDomainRule(rawValue)
+    if (!rule) {
+      invalid.push(rawValue)
+      continue
+    }
+    if (seen.has(rule.value)) {
+      duplicates.push(rule.value)
+      continue
+    }
+
+    seen.add(rule.value)
+    rules.push(rule)
+    added.push(rule.value)
+  }
+
+  return {
+    value: rules.map(rule => rule.value).join(","),
+    added,
+    duplicates,
+    invalid,
+  }
 }

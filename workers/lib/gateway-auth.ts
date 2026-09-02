@@ -1,4 +1,5 @@
 const encoder = new TextEncoder()
+const DOMAIN_RULES_AUTH_PAYLOAD = "GET\n/v1/domain-rules"
 
 export interface GatewaySignatureInput {
   timestamp: string
@@ -66,6 +67,42 @@ export async function verifyGatewaySignature(
     key,
     signatureBytes,
     encoder.encode(canonicalGatewayPayload(input)),
+  )
+}
+
+export async function signDomainRulesRequest(secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  )
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(DOMAIN_RULES_AUTH_PAYLOAD),
+  )
+  return bytesToHex(new Uint8Array(signature))
+}
+
+export async function verifyDomainRulesRequest(secret: string, signature: string): Promise<boolean> {
+  const normalizedSignature = signature.startsWith("v1=") ? signature.slice(3) : ""
+  const signatureBytes = hexToBytes(normalizedSignature)
+  if (!signatureBytes) return false
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  )
+  return crypto.subtle.verify(
+    "HMAC",
+    key,
+    signatureBytes,
+    encoder.encode(DOMAIN_RULES_AUTH_PAYLOAD),
   )
 }
 

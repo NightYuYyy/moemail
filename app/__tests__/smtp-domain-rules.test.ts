@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   getSmtpAllowedDomainRules,
+  getConfiguredEmailDomainRules,
   isSmtpRecipientAllowed,
 } from "../../workers/lib/smtp-domain-rules"
 
@@ -30,5 +31,17 @@ describe("SMTP domain rules", () => {
     expect(isSmtpRecipientAllowed("missing-at", rules)).toBe(false)
     expect(isSmtpRecipientAllowed("mailbox@evilnightuu.com", rules)).toBe(false)
     expect(isSmtpRecipientAllowed("mailbox@nightuu.com.evil.test", rules)).toBe(false)
+  })
+
+  it("uses the shared site configuration and falls back safely", async () => {
+    const store = { get: async () => "nightyu.com,*.nightuu.com" }
+    await expect(getConfiguredEmailDomainRules(store, {
+      SMTP_ALLOWED_DOMAIN_SUFFIXES: "fallback.example",
+    })).resolves.toBe("nightyu.com,*.nightuu.com")
+
+    const unavailableStore = { get: async () => { throw new Error("unavailable") } }
+    await expect(getConfiguredEmailDomainRules(unavailableStore, {
+      SMTP_ALLOWED_DOMAIN_SUFFIXES: "nightyu.com,nightuu.com",
+    })).resolves.toBe("*.nightyu.com,*.nightuu.com")
   })
 })

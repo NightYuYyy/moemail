@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   isEmailDomainAllowed,
+  mergeEmailDomainRules,
   normalizeEmailDomain,
   normalizeEmailDomainRules,
   parseEmailDomainRules,
@@ -37,5 +38,17 @@ describe("email domain rules", () => {
   it("deduplicates normalized rules", () => {
     expect(parseEmailDomainRules("nightyu.com,NIGHTYU.COM").map(rule => rule.value))
       .toEqual(["nightyu.com"])
+  })
+
+  it("merges single and batch domain rules with useful validation results", () => {
+    const result = mergeEmailDomainRules(
+      "nightyu.com,*.nightyu.com",
+      "nightuu.com\n*.nightuu.com, NIGHTYU.com;bad_domain",
+    )
+
+    expect(result.value).toBe("nightyu.com,*.nightyu.com,nightuu.com,*.nightuu.com")
+    expect(result.added).toEqual(["nightuu.com", "*.nightuu.com"])
+    expect(result.duplicates).toEqual(["nightyu.com"])
+    expect(result.invalid).toEqual(["bad_domain"])
   })
 })

@@ -13,6 +13,12 @@
     "SMTP_ALLOWED_DOMAIN_SUFFIXES": "nightyu.com,nightuu.com"
   },
   "main": "workers/email-receiver.ts",
+  "kv_namespaces": [
+    {
+      "binding": "SITE_CONFIG",
+      "id": "${KV_NAMESPACE_ID}"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

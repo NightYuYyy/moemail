@@ -1,6 +1,7 @@
 'use strict'
 
 const path = require('node:path')
+const { isAllowedDomain, parseDomainRules } = require('./domain-rules')
 
 function parseList(value) {
   return String(value || '')
@@ -23,27 +24,29 @@ function requireHttpsUrl(value, name, nodeEnv) {
   return url.toString()
 }
 
-function isAllowedDomain(domain, suffixes) {
-  const normalized = String(domain || '').trim().toLowerCase().replace(/\.$/, '')
-  return suffixes.some((suffix) => normalized !== suffix && normalized.endsWith(`.${suffix}`))
-}
-
 function loadConfig(env = process.env) {
   const spoolDir = env.SPOOL_DIR || '/var/spool/moemail-gateway'
   const acceptedDomainSuffixes = parseList(env.ACCEPTED_DOMAIN_SUFFIXES)
+  const acceptedDomainRules = parseDomainRules(
+    env.ACCEPTED_DOMAIN_RULES || acceptedDomainSuffixes.map((suffix) => `*.${suffix}`),
+  )
   const ingestSecret = String(env.MOEMAIL_INGEST_SECRET || '')
 
-  if (acceptedDomainSuffixes.length === 0) {
-    throw new Error('ACCEPTED_DOMAIN_SUFFIXES is required')
+  if (acceptedDomainRules.length === 0) {
+    throw new Error('ACCEPTED_DOMAIN_RULES or ACCEPTED_DOMAIN_SUFFIXES is required')
   }
   if (ingestSecret.length < 32) {
     throw new Error('MOEMAIL_INGEST_SECRET must contain at least 32 characters')
   }
 
+  const ingestUrl = requireHttpsUrl(env.MOEMAIL_INGEST_URL, 'MOEMAIL_INGEST_URL', env.NODE_ENV)
   return {
-    ingestUrl: requireHttpsUrl(env.MOEMAIL_INGEST_URL, 'MOEMAIL_INGEST_URL', env.NODE_ENV),
+    ingestUrl,
     ingestSecret,
     acceptedDomainSuffixes,
+    acceptedDomainRules,
+    domainRulesUrl: new URL('/v1/domain-rules', ingestUrl).toString(),
+    domainRulesRefreshIntervalMs: parsePositiveInt(env.DOMAIN_RULES_REFRESH_INTERVAL_MS, 60000),
     smtpTlsCertPath: env.SMTP_TLS_CERT_PATH || '',
     smtpTlsKeyPath: env.SMTP_TLS_KEY_PATH || '',
     spoolDir,

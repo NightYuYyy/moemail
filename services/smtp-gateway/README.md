@@ -7,6 +7,7 @@ It is based on [Haraka](https://github.com/haraka/Haraka). The spool/retry layou
 ## Security boundary
 
 - Only subdomains below `ACCEPTED_DOMAIN_SUFFIXES` are accepted.
+- The gateway refreshes exact and wildcard rules from the authenticated Email Worker endpoint and keeps the last valid rules if refresh fails.
 - The gateway does not support SMTP AUTH or outbound relay.
 - Each HTTPS request is authenticated with HMAC-SHA256 over the envelope and raw MIME body digest.
 - Messages are removed from the spool only after a successful `2xx` response.

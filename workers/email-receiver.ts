@@ -1,13 +1,14 @@
-import { sha256Hex, verifyGatewaySignature } from "./lib/gateway-auth"
+import { parseEmailDomainRules } from "../app/lib/email-domain"
+import { sha256Hex, verifyDomainRulesRequest, verifyGatewaySignature } from "./lib/gateway-auth"
 import { processIncomingEmail } from "./lib/process-incoming-email"
-import { getSmtpAllowedDomainRules, isSmtpRecipientAllowed } from "./lib/smtp-domain-rules"
+import { getConfiguredEmailDomainRules, isSmtpRecipientAllowed } from "./lib/smtp-domain-rules"
 
 const MAX_MESSAGE_BYTES = 25 * 1024 * 1024
 const MAX_RECIPIENTS = 50
 const MAX_CLOCK_SKEW_SECONDS = 300
 const TOKEN_PATTERN = /^[a-zA-Z0-9_.-]{1,160}$/
 
-interface EmailWorkerEnv extends Pick<CloudflareEnv, "DB"> {
+interface EmailWorkerEnv extends Pick<CloudflareEnv, "DB" | "SITE_CONFIG"> {
   SMTP_GATEWAY_SECRET?: string
   SMTP_ALLOWED_DOMAIN_SUFFIXES?: string
   SMTP_ALLOWED_DOMAIN?: string
@@ -37,13 +38,30 @@ const worker = {
       return Response.json({ status: "ok" })
     }
 
-    if (request.method !== "POST" || url.pathname !== "/v1/inbound") {
-      return Response.json({ error: "not_found" }, { status: 404 })
-    }
-
     if (!env.SMTP_GATEWAY_SECRET || env.SMTP_GATEWAY_SECRET.length < 32) {
       console.error(JSON.stringify({ event: "gateway_configuration_error", reason: "missing_secret" }))
       return Response.json({ error: "service_unavailable" }, { status: 503 })
+    }
+
+    if (request.method === "GET" && url.pathname === "/v1/domain-rules") {
+      const verified = await verifyDomainRulesRequest(
+        env.SMTP_GATEWAY_SECRET,
+        request.headers.get("x-moe-signature") || "",
+      )
+      if (!verified) {
+        return Response.json({ error: "invalid_signature" }, { status: 401 })
+      }
+
+      const rulesValue = await getConfiguredEmailDomainRules(env.SITE_CONFIG, env)
+      return Response.json({
+        rules: parseEmailDomainRules(rulesValue).map(rule => rule.value),
+      }, {
+        headers: { "Cache-Control": "no-store" },
+      })
+    }
+
+    if (request.method !== "POST" || url.pathname !== "/v1/inbound") {
+      return Response.json({ error: "not_found" }, { status: 404 })
     }
 
     const contentLength = Number(request.headers.get("content-length") || "0")
@@ -73,13 +91,14 @@ const worker = {
     const recipients = Array.from(new Set(
       recipientsHeader.split(",").map(value => value.trim().toLowerCase()).filter(Boolean),
     ))
-    const allowedDomainRules = getSmtpAllowedDomainRules(env)
 
     if (
       recipients.length === 0
       || recipients.length > MAX_RECIPIENTS
-      || !allowedDomainRules
-      || recipients.some(recipient => !isSmtpRecipientAllowed(recipient, allowedDomainRules))
+      || recipients.some(recipient => {
+        const at = recipient.lastIndexOf("@")
+        return at <= 0 || at === recipient.length - 1
+      })
     ) {
       return Response.json({ error: "invalid_recipient" }, { status: 400 })
     }
@@ -101,6 +120,14 @@ const worker = {
 
     if (!verified) {
       return Response.json({ error: "invalid_signature" }, { status: 401 })
+    }
+
+    const allowedDomainRules = await getConfiguredEmailDomainRules(env.SITE_CONFIG, env)
+    if (
+      !allowedDomainRules
+      || recipients.some(recipient => !isSmtpRecipientAllowed(recipient, allowedDomainRules))
+    ) {
+      return Response.json({ error: "invalid_recipient" }, { status: 400 })
     }
 
     try {

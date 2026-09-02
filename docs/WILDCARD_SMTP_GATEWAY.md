@@ -20,6 +20,7 @@ Both Worker handlers call `workers/lib/process-incoming-email.ts`; the UI and me
 
 - The SMTP gateway accepts only real subdomains below `ACCEPTED_DOMAIN_SUFFIXES`. It never accepts outbound relay.
 - `ACCEPTED_DOMAIN_SUFFIXES` and the Email Worker's `SMTP_ALLOWED_DOMAIN_SUFFIXES` both accept comma-separated base domains. Keep the two lists identical.
+- Bind the same `SITE_CONFIG` KV namespace to Pages and the Email Worker. The gateway retrieves current exact/wildcard rules from the Worker's authenticated `/v1/domain-rules` endpoint and refreshes them every minute.
 - The gateway/Worker shared secret is stored only in a root-readable server `.env` and a Cloudflare Worker Secret.
 - Every request signs the timestamp, nonce, delivery ID, envelope sender, recipients, and SHA-256 digest of the raw MIME body with HMAC-SHA256.
 - Worker requests older than five minutes are rejected.

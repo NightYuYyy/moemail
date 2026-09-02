@@ -1,8 +1,16 @@
-import { isEmailDomainAllowed, normalizeEmailDomain } from "../../app/lib/email-domain"
+import {
+  isEmailDomainAllowed,
+  normalizeEmailDomain,
+  normalizeEmailDomainRules,
+} from "../../app/lib/email-domain"
 
 export interface SmtpDomainRuleEnv {
   SMTP_ALLOWED_DOMAIN_SUFFIXES?: string
   SMTP_ALLOWED_DOMAIN?: string
+}
+
+export interface EmailDomainRulesStore {
+  get(key: string): Promise<string | null>
 }
 
 export function getSmtpAllowedDomainRules(env: SmtpDomainRuleEnv): string {
@@ -22,4 +30,19 @@ export function isSmtpRecipientAllowed(recipient: string, rules: string): boolea
   const at = normalizedRecipient.lastIndexOf("@")
 
   return at > 0 && isEmailDomainAllowed(normalizedRecipient.slice(at + 1), rules)
+}
+
+export async function getConfiguredEmailDomainRules(
+  store: EmailDomainRulesStore,
+  fallbackEnv: SmtpDomainRuleEnv,
+): Promise<string> {
+  try {
+    const configured = await store.get("EMAIL_DOMAINS")
+    const normalized = configured ? normalizeEmailDomainRules(configured) : null
+    if (normalized) return normalized
+  } catch {
+    // KV 暂时不可用时保留已部署的静态白名单，避免中断现有邮件。
+  }
+
+  return getSmtpAllowedDomainRules(fallbackEnv)
 }

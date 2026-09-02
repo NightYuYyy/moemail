@@ -310,7 +310,7 @@ System settings are stored in Cloudflare KV, including:
 - `ADMIN_CONTACT`: Administrator contact info
 - `MAX_EMAILS`: Maximum number of emails per user
 
-**Emperor** role can configure these in the User Profile page.
+The **Emperor** role can configure these in the User Profile page. Email domains use a list editor with single and batch entry: `example.com` enables only the apex, while `*.example.com` enables real subdomains. When Pages and the Email Worker share the same `SITE_CONFIG` KV binding, the SMTP gateway periodically synchronizes the active rules through an authenticated endpoint.
 
 ## Sending Emails
 

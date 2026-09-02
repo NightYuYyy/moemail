@@ -309,7 +309,7 @@ Cloudflare Email Routing 不能直接接收无限动态子域。泛子域收信�
 - `ADMIN_CONTACT`: 管理员联系方式
 - `MAX_EMAILS`: 每个用户可创建的最大邮箱数量
 
-**皇帝**角色可以在个人中心页面设置
+**皇帝**角色可以在个人中心页面设置。邮箱域名使用列表管理，支持单个和批量添加：`example.com` 只允许主域名，`*.example.com` 允许任意真实子域名。Email Worker 与 Pages 绑定同一个 `SITE_CONFIG` KV 后，SMTP 网关会通过受保护接口定时同步当前规则。
 
 ## 发件功能
 

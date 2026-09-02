@@ -18,12 +18,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { EMAIL_CONFIG } from "@/config"
+import { DomainRulesManager } from "./domain-rules-manager"
 
 export function WebsiteConfigPanel() {
   const t = useTranslations("profile.website")
   const tCard = useTranslations("profile.card")
   const [defaultRole, setDefaultRole] = useState<string>("")
   const [emailDomains, setEmailDomains] = useState<string>("")
+  const [savedEmailDomains, setSavedEmailDomains] = useState<string>("")
   const [adminContact, setAdminContact] = useState<string>("")
   const [maxEmails, setMaxEmails] = useState<string>(EMAIL_CONFIG.MAX_ACTIVE_EMAILS.toString())
   const [turnstileEnabled, setTurnstileEnabled] = useState(false)
@@ -54,6 +56,7 @@ export function WebsiteConfigPanel() {
       }
       setDefaultRole(data.defaultRole)
       setEmailDomains(data.emailDomains)
+      setSavedEmailDomains(data.emailDomains)
       setAdminContact(data.adminContact)
       setMaxEmails(data.maxEmails || EMAIL_CONFIG.MAX_ACTIVE_EMAILS.toString())
       setTurnstileEnabled(Boolean(data.turnstile?.enabled))
@@ -81,7 +84,12 @@ export function WebsiteConfigPanel() {
         }),
       })
 
-      if (!res.ok) throw new Error(t("saveFailed"))
+      if (!res.ok) {
+        const data = await res.json().catch(() => null) as { error?: string } | null
+        throw new Error(data?.error || t("saveFailed"))
+      }
+
+      setSavedEmailDomains(emailDomains)
 
       toast({
         title: t("saveSuccess"),
@@ -120,16 +128,13 @@ export function WebsiteConfigPanel() {
           </Select>
         </div>
 
-        <div className="flex items-center gap-4">
-          <span className="text-sm">{t("emailDomains")}:</span>
-          <div className="flex-1">
-            <Input 
-              value={emailDomains}
-              onChange={(e) => setEmailDomains(e.target.value)}
-              placeholder={t("emailDomainsPlaceholder")}
-            />
-          </div>
-        </div>
+        <DomainRulesManager
+          value={emailDomains}
+          disabled={loading}
+          pending={emailDomains !== savedEmailDomains}
+          onChange={setEmailDomains}
+          onReset={() => setEmailDomains(savedEmailDomains)}
+        />
 
         <div className="flex items-center gap-4">
           <span className="text-sm">{t("adminContact")}:</span>
@@ -218,7 +223,7 @@ export function WebsiteConfigPanel() {
           disabled={loading}
           className="w-full"
         >
-          {t("save")}
+          {loading ? t("saving") : t("save")}
         </Button>
       </div>
     </div>
